@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <!-- The TargetFramework correctly specifies the '-windows' platform -->
+        <TargetFramework>net9.0-windows</TargetFramework>
+        <!-- This line correctly pulls in the Desktop Runtime dependencies -->
+        <UseWPF>true</UseWPF>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    </PropertyGroup>
+</Project>

@@ -1,0 +1,74 @@
+# Workflow name
+name: Build and Release .NET 9 Diagnostic Tool
+
+# Triggers
+on:
+  push:
+    branches: [ "main" ] # Automatically run on pushes to the main branch
+  workflow_dispatch:     # Allows manual triggering from the Actions tab
+
+# Job definition
+jobs:
+  build_and_release:
+    runs-on: windows-latest
+
+    steps:
+    # Step 1: Check out the repository code
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # Step 2: Setup the required .NET 9 SDK
+    - name: Setup .NET 9 SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    # Step 3: Build and publish the CLI tester program
+    - name: Build and Publish CLI Tester
+      run: dotnet publish Dotnet9CliTester/Dotnet9CliTester.csproj -c Release -r win-x64 --no-self-contained -o dist/cli
+
+    # Step 4: Build and publish the Desktop tester program
+    - name: Build and Publish Desktop Tester
+      run: dotnet publish Dotnet9DesktopTester/Dotnet9DesktopTester.csproj -c Release -r win-x64 --no-self-contained -o dist/desktop
+
+    # Step 5: Assemble all files into a 'release' directory
+    - name: Prepare Release Package Directory
+      run: |
+        mkdir release
+        copy check_dotnet9.cmd release\
+        xcopy dist\cli release\cli\ /E /I
+        xcopy dist\desktop release\desktop\ /E /I
+        
+    # Step 6: Create a ZIP archive from the 'release' directory
+    - name: Create ZIP Archive
+      run: Compress-Archive -Path release\* -DestinationPath dotnet9-diagnostic-tool.zip
+      shell: pwsh
+
+    # Step 7: Generate a meaningful tag and release name
+    - name: Generate Release Info
+      id: generate_info
+      run: |
+        $date = Get-Date -Format 'yyyyMMdd.HHmm'
+        $shortSha = git rev-parse --short HEAD
+        $tagName = "v{0}-{1}" -f $date, $shortSha
+        $releaseName = "Diagnostic Tool {0}" -f $tagName
+        echo "TAG_NAME=$tagName" >> $env:GITHUB_OUTPUT
+        echo "RELEASE_NAME=$releaseName" >> $env:GITHUB_OUTPUT
+      shell: pwsh
+
+    # Step 8: Create a new GitHub Release and upload the ZIP file
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        # The files to upload as assets to the release.
+        files: dotnet9-diagnostic-tool.zip
+        # Use the tag name generated in the previous step
+        tag_name: ${{ steps.generate_info.outputs.TAG_NAME }}
+        # Use the release name generated in the previous step
+        name: ${{ steps.generate_info.outputs.RELEASE_NAME }}
+        # A description for the release, including the full commit hash for traceability.
+        body: |
+          Automated build of the .NET 9 diagnostic tool.
+          Based on commit: `${{ github.sha }}`
+
+          Download and extract the `dotnet9-diagnostic-tool.zip` file below to run the tests.
